@@ -1,0 +1,19 @@
+# Data files (do NOT include in submission)
+*.csv
+
+# Build artifacts
+build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Compiled objects
+*.o
+*.a
+*.so
+*.dylib
