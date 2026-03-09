@@ -223,6 +223,8 @@ To capture the true multi-threading behavior, we applied a **cache warm-up phase
 
 ### 6.2 Memory Footprint Comparison (RQ10)
 
+![Memory Footprint Comparison](graphs/memory_footprint.png)
+
 The SoA parser successfully loaded all **20,417,819 rows** from the 12 GB dataset in 204 seconds, fitting comfortably within the M4 Pro's 24 GB RAM — something the AoS layout fundamentally cannot do.
 
 | Layout | Memory (full 20.4M rows) | vs SoA (vector) |
