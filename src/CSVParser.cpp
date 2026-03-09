@@ -13,7 +13,9 @@
 
 std::vector<std::string> CSVParser::splitCSVLine(const std::string &line) {
   std::vector<std::string> fields;
+  fields.reserve(44); // NYC 311 data has 44 columns
   std::string current;
+  current.reserve(256); // Prevent frequent reallocations
   bool inQuotes = false;
 
   for (size_t i = 0; i < line.size(); ++i) {
@@ -48,41 +50,51 @@ std::vector<std::string> CSVParser::splitCSVLine(const std::string &line) {
 
 // ─── Date Parsing ────────────────────────────────────────────────────────────
 
+static inline int parse2Digits(const char *s) {
+  return (s[0] - '0') * 10 + (s[1] - '0');
+}
+
+static inline int parse4Digits(const char *s) {
+  return (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 +
+         (s[3] - '0');
+}
+
 time_t CSVParser::parseDate(const std::string &dateStr) {
   if (dateStr.empty())
     return 0;
 
   struct tm tm = {};
+  const char *s = dateStr.c_str();
+  size_t len = dateStr.size();
 
   // Try ISO 8601 format: "2026-03-06T02:53:58.000"
-  if (dateStr.size() >= 19 && dateStr[4] == '-' && dateStr[10] == 'T') {
-    tm.tm_year = std::stoi(dateStr.substr(0, 4)) - 1900;
-    tm.tm_mon = std::stoi(dateStr.substr(5, 2)) - 1;
-    tm.tm_mday = std::stoi(dateStr.substr(8, 2));
-    tm.tm_hour = std::stoi(dateStr.substr(11, 2));
-    tm.tm_min = std::stoi(dateStr.substr(14, 2));
-    tm.tm_sec = std::stoi(dateStr.substr(17, 2));
+  if (len >= 19 && s[4] == '-' && s[10] == 'T') {
+    tm.tm_year = parse4Digits(s) - 1900;
+    tm.tm_mon = parse2Digits(s + 5) - 1;
+    tm.tm_mday = parse2Digits(s + 8);
+    tm.tm_hour = parse2Digits(s + 11);
+    tm.tm_min = parse2Digits(s + 14);
+    tm.tm_sec = parse2Digits(s + 17);
     tm.tm_isdst = -1;
     return mktime(&tm);
   }
 
   // Try MM/DD/YYYY HH:MM:SS AM/PM format
-  if (dateStr.size() >= 10 && dateStr[2] == '/') {
-    tm.tm_mon = std::stoi(dateStr.substr(0, 2)) - 1;
-    tm.tm_mday = std::stoi(dateStr.substr(3, 2));
-    tm.tm_year = std::stoi(dateStr.substr(6, 4)) - 1900;
+  if (len >= 10 && s[2] == '/') {
+    tm.tm_mon = parse2Digits(s) - 1;
+    tm.tm_mday = parse2Digits(s + 3);
+    tm.tm_year = parse4Digits(s + 6) - 1900;
 
-    if (dateStr.size() >= 19) {
-      tm.tm_hour = std::stoi(dateStr.substr(11, 2));
-      tm.tm_min = std::stoi(dateStr.substr(14, 2));
-      tm.tm_sec = std::stoi(dateStr.substr(17, 2));
+    if (len >= 19) {
+      tm.tm_hour = parse2Digits(s + 11);
+      tm.tm_min = parse2Digits(s + 14);
+      tm.tm_sec = parse2Digits(s + 17);
 
       // Handle AM/PM
-      if (dateStr.size() >= 22) {
-        std::string ampm = dateStr.substr(20, 2);
-        if (ampm == "PM" && tm.tm_hour != 12)
+      if (len >= 22) {
+        if (s[20] == 'P' && tm.tm_hour != 12)
           tm.tm_hour += 12;
-        if (ampm == "AM" && tm.tm_hour == 12)
+        if (s[20] == 'A' && tm.tm_hour == 12)
           tm.tm_hour = 0;
       }
     }
