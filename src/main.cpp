@@ -18,16 +18,23 @@
 struct Config {
   std::string dataFile;
   int trials = 10;
-  int phase = 0;         // 0 = all, 1/2/3 = specific
-  std::string csvOutput; // optional CSV output file
+  int parseTrials =
+      0;         // 0 = use trials; separate count for slow parse experiments
+  int phase = 0; // 0 = all, 1/2/3 = specific
+  size_t maxRows = 0; // 0 = no limit; cap for AoS experiments on huge datasets
+  bool skipParse = false; // skip timed parse benchmarks, only run query exps
+  std::string csvOutput;  // optional CSV output file
+
+  int getParseTrials() const { return parseTrials > 0 ? parseTrials : trials; }
 };
 
 Config parseArgs(int argc, char *argv[]) {
   Config cfg;
   if (argc < 2) {
-    std::cerr
-        << "Usage: " << argv[0]
-        << " <csv_file> [--trials N] [--phase 1|2|3|all] [--csv output.csv]\n";
+    std::cerr << "Usage: " << argv[0]
+              << " <csv_file> [--trials N] [--parse-trials N] [--max-rows N] "
+                 "[--phase "
+                 "1|2|3|all] [--csv output.csv]\n";
     exit(1);
   }
   cfg.dataFile = argv[1];
@@ -35,6 +42,12 @@ Config parseArgs(int argc, char *argv[]) {
   for (int i = 2; i < argc; ++i) {
     if (std::strcmp(argv[i], "--trials") == 0 && i + 1 < argc) {
       cfg.trials = std::stoi(argv[++i]);
+    } else if (std::strcmp(argv[i], "--parse-trials") == 0 && i + 1 < argc) {
+      cfg.parseTrials = std::stoi(argv[++i]);
+    } else if (std::strcmp(argv[i], "--max-rows") == 0 && i + 1 < argc) {
+      cfg.maxRows = static_cast<size_t>(std::stoll(argv[++i]));
+    } else if (std::strcmp(argv[i], "--skip-parse") == 0) {
+      cfg.skipParse = true;
     } else if (std::strcmp(argv[i], "--phase") == 0 && i + 1 < argc) {
       ++i;
       if (std::strcmp(argv[i], "all") == 0)
@@ -94,38 +107,46 @@ void runPhase1(const Config &cfg, std::ofstream *csvOut) {
   CSVParser parser;
   DataStore store;
 
-  // E1.1: Full CSV parse (serial)
-  auto r1 = BenchmarkHarness::benchmark(
-      "E1.1: CSV Parse (serial)",
-      [&]() { store = parser.parseFile(cfg.dataFile); }, cfg.trials);
-  r1.printTable();
-  if (csvOut)
-    r1.writeCSV(*csvOut);
+  // Load data (always needed for query benchmarks)
+  store = parser.parseFile(cfg.dataFile, cfg.maxRows);
+  std::cout << "  [Loaded " << store.size() << " records]\n\n";
 
-  std::cout << "  → Records loaded: " << store.size() << "\n\n";
+  if (!cfg.skipParse) {
+    // E1.1: Full CSV parse (serial)
+    auto r1 = BenchmarkHarness::benchmark(
+        "E1.1: CSV Parse (serial)",
+        [&]() { store = parser.parseFile(cfg.dataFile, cfg.maxRows); },
+        cfg.getParseTrials());
+    r1.printTable();
+    if (csvOut)
+      r1.writeCSV(*csvOut);
 
-  // E1.3: reserve() vs no reserve
-  auto r3a = BenchmarkHarness::benchmark(
-      "E1.3a: Parse WITHOUT reserve()",
-      [&]() {
-        CSVParser p;
-        auto s = p.parseFile(cfg.dataFile);
-      },
-      cfg.trials);
-  r3a.printTable();
-  if (csvOut)
-    r3a.writeCSV(*csvOut);
+    std::cout << "  → Records loaded: " << store.size() << "\n\n";
 
-  auto r3b = BenchmarkHarness::benchmark(
-      "E1.3b: Parse WITH reserve(N)",
-      [&]() {
-        CSVParser p;
-        auto s = p.parseFileWithReserve(cfg.dataFile, store.size());
-      },
-      cfg.trials);
-  r3b.printTable();
-  if (csvOut)
-    r3b.writeCSV(*csvOut);
+    // E1.3: reserve() vs no reserve
+    auto r3a = BenchmarkHarness::benchmark(
+        "E1.3a: Parse WITHOUT reserve()",
+        [&]() {
+          CSVParser p;
+          auto s = p.parseFile(cfg.dataFile, cfg.maxRows);
+        },
+        cfg.getParseTrials());
+    r3a.printTable();
+    if (csvOut)
+      r3a.writeCSV(*csvOut);
+
+    auto r3b = BenchmarkHarness::benchmark(
+        "E1.3b: Parse WITH reserve(N)",
+        [&]() {
+          CSVParser p;
+          auto s =
+              p.parseFileWithReserve(cfg.dataFile, store.size(), cfg.maxRows);
+        },
+        cfg.getParseTrials());
+    r3b.printTable();
+    if (csvOut)
+      r3b.writeCSV(*csvOut);
+  } // end !skipParse
 
   // E1.4: Memory footprint
   size_t memBytes = store.memoryFootprint();
@@ -319,7 +340,7 @@ void runPhase2(const Config &cfg, std::ofstream *csvOut) {
 
   // Parse data first (serial) for query benchmarks
   CSVParser parser;
-  DataStore store = parser.parseFile(cfg.dataFile);
+  DataStore store = parser.parseFile(cfg.dataFile, cfg.maxRows);
   DateBounds db = findDateBounds(store);
 
   // E2.1 + E2.2: Query scaling curve
@@ -389,41 +410,48 @@ void runPhase2(const Config &cfg, std::ofstream *csvOut) {
               << speedup << "x\n\n";
   }
 
-  // E2.3: Parse — serial vs parallel
-  auto parseSerial = BenchmarkHarness::benchmark(
-      "E2.3: Parse SERIAL",
-      [&]() {
-        CSVParser p;
-        auto s = p.parseFile(cfg.dataFile);
-      },
-      cfg.trials);
-  parseSerial.printTable();
-  if (csvOut)
-    parseSerial.writeCSV(*csvOut);
-
-  for (int t : threadCounts) {
-    omp_set_num_threads(t);
-    std::string name = "E2.3: Parse PARALLEL " + std::to_string(t) + " threads";
-    auto result = BenchmarkHarness::benchmark(
-        name,
+  // E2.3: Parse — serial vs parallel (skipped with --skip-parse)
+  if (!cfg.skipParse) {
+    auto parseSerial = BenchmarkHarness::benchmark(
+        "E2.3: Parse SERIAL",
         [&]() {
           CSVParser p;
-          auto s = p.parseFileParallel(cfg.dataFile);
+          auto s = p.parseFile(cfg.dataFile, cfg.maxRows);
         },
-        cfg.trials);
-    result.printTable();
+        cfg.getParseTrials());
+    parseSerial.printTable();
     if (csvOut)
-      result.writeCSV(*csvOut);
+      parseSerial.writeCSV(*csvOut);
 
-    double speedup = parseSerial.mean_ms / result.mean_ms;
-    std::cout << "  → Parse speedup: " << std::fixed << std::setprecision(2)
-              << speedup << "x\n\n";
-  }
+    for (int t : threadCounts) {
+      omp_set_num_threads(t);
+      std::string name =
+          "E2.3: Parse PARALLEL " + std::to_string(t) + " threads";
+      auto result = BenchmarkHarness::benchmark(
+          name,
+          [&]() {
+            CSVParser p;
+            auto s = p.parseFileParallel(cfg.dataFile, cfg.maxRows);
+          },
+          cfg.getParseTrials());
+      result.printTable();
+      if (csvOut)
+        result.writeCSV(*csvOut);
 
-  // E2.4: Small dataset threading overhead test
+      double speedup = parseSerial.mean_ms / result.mean_ms;
+      std::cout << "  → Parse speedup: " << std::fixed << std::setprecision(2)
+                << speedup << "x\n\n";
+    }
+  } // end !skipParse
+
+  // E2.4: Threading overhead test (with warm-up to avoid cold-cache outliers)
   omp_set_num_threads(maxThreads);
+  // Warm-up: run one query to populate cache, then benchmark
+  {
+    auto warmup = QueryEngine::queryByBorough(store, Borough::BROOKLYN);
+  }
   auto smallSerial = BenchmarkHarness::benchmark(
-      "E2.4: Query 1000 rows SERIAL",
+      "E2.4: Query SERIAL (warmed)",
       [&]() {
         auto res = QueryEngine::queryByBorough(store, Borough::BROOKLYN);
       },
@@ -432,8 +460,12 @@ void runPhase2(const Config &cfg, std::ofstream *csvOut) {
   if (csvOut)
     smallSerial.writeCSV(*csvOut);
 
+  {
+    auto warmup = QueryEngine::queryByBoroughParallel(store, Borough::BROOKLYN);
+  }
   auto smallParallel = BenchmarkHarness::benchmark(
-      "E2.4: Query 1000 rows " + std::to_string(maxThreads) + " threads",
+      "E2.4: Query PARALLEL " + std::to_string(maxThreads) +
+          " threads (warmed)",
       [&]() {
         auto res =
             QueryEngine::queryByBoroughParallel(store, Borough::BROOKLYN);
@@ -468,23 +500,32 @@ void runPhase3(const Config &cfg, std::ofstream *csvOut) {
   DataStore aosStore;
   DataStoreSoA soaStore;
 
+  // Always load data for query experiments
+  aosStore = parser.parseFile(cfg.dataFile, cfg.maxRows);
+  soaStore.convertFromAoS(aosStore);
+  std::cout << "  [Loaded " << aosStore.size()
+            << " records into AoS + SoA]\n\n";
+
   // E3.7: Parse time comparison — AoS vs SoA
-  auto aosParseResult = BenchmarkHarness::benchmark(
-      "E3.7a: AoS CSV parse",
-      [&]() { aosStore = parser.parseFile(cfg.dataFile); }, cfg.trials);
-  aosParseResult.printTable();
-  if (csvOut)
-    aosParseResult.writeCSV(*csvOut);
+  if (!cfg.skipParse) {
+    auto aosParseResult = BenchmarkHarness::benchmark(
+        "E3.7a: AoS CSV parse",
+        [&]() { aosStore = parser.parseFile(cfg.dataFile, cfg.maxRows); },
+        cfg.getParseTrials());
+    aosParseResult.printTable();
+    if (csvOut)
+      aosParseResult.writeCSV(*csvOut);
 
-  auto soaParseResult = BenchmarkHarness::benchmark(
-      "E3.7b: SoA direct CSV parse",
-      [&]() { soaStore.parseFromCSV(cfg.dataFile); }, cfg.trials);
-  soaParseResult.printTable();
-  if (csvOut)
-    soaParseResult.writeCSV(*csvOut);
+    auto soaParseResult = BenchmarkHarness::benchmark(
+        "E3.7b: SoA direct CSV parse",
+        [&]() { soaStore.parseFromCSV(cfg.dataFile); }, cfg.getParseTrials());
+    soaParseResult.printTable();
+    if (csvOut)
+      soaParseResult.writeCSV(*csvOut);
 
-  std::cout << "  → AoS records: " << aosStore.size()
-            << " | SoA records: " << soaStore.size() << "\n\n";
+    std::cout << "  \u2192 AoS records: " << aosStore.size()
+              << " | SoA records: " << soaStore.size() << "\n\n";
+  } // end !skipParse
 
   // E3.6: Memory footprint comparison
   size_t aosMem = aosStore.memoryFootprint();
@@ -510,8 +551,8 @@ void runPhase3(const Config &cfg, std::ofstream *csvOut) {
   std::cout << "│ Unique complaint types    │ " << std::setw(12)
             << soaStore.complaint_type_lookup.size()
             << "                    │\n";
-  std::cout
-      << "└──────────────────────────┴──────────────────────────────────┘\n\n";
+  std::cout << "└──────────────────────────┴─────────────────────────────────"
+               "─┘\n\n";
 
   // E3.6b: Flat string buffer memory comparison
   size_t soaFlatMem = soaStore.memoryFootprintFlat();
@@ -537,8 +578,8 @@ void runPhase3(const Config &cfg, std::ofstream *csvOut) {
             << " (1 per column)    │\n";
   std::cout << "│ vector<string> mallocs   │ " << std::setw(12)
             << soaStore.size() * 13 << " (N per column)    │\n";
-  std::cout
-      << "└──────────────────────────┴──────────────────────────────────┘\n\n";
+  std::cout << "└──────────────────────────┴─────────────────────────────────"
+               "─┘\n\n";
 
   // E3.9: Complaint type query — scattered vs contiguous strings
   auto soaScatteredQuery = BenchmarkHarness::benchmark(
@@ -728,11 +769,12 @@ void runPhase3(const Config &cfg, std::ofstream *csvOut) {
             << std::setprecision(2)
             << aosDateResult.mean_ms / soaDateResult.mean_ms
             << "x                  │\n";
-  std::cout
-      << "└──────────────────────────┴──────────────────────────────────┘\n\n";
+  std::cout << "└──────────────────────────┴─────────────────────────────────"
+               "─┘\n\n";
 }
 
-// ─── Main entry point ───────────────────────────────────────────────────────
+// ─── Main entry point
+// ───────────────────────────────────────────────────────
 
 int main(int argc, char *argv[]) {
   Config cfg = parseArgs(argc, argv);

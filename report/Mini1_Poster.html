@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini 1 Poster</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .poster {
+            width: 1600px;
+            height: 900px;
+            background-color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-rows: 120px 1fr 60px;
+            overflow: hidden;
+            position: relative;
+        }
+        .header {
+            background-color: #1a365d;
+            color: white;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .title h1 {
+            margin: 0 0 10px 0;
+            font-size: 36px;
+            font-weight: 800;
+        }
+        .title h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 400;
+            color: #90cdf4;
+        }
+        .author {
+            text-align: right;
+        }
+        .author h2 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+        }
+        .author p {
+            margin: 0;
+            font-size: 16px;
+            color: #90cdf4;
+        }
+        .content {
+            padding: 30px 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+        }
+        .col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            flex-grow: 1;
+        }
+        .card h3 {
+            margin: 0 0 15px 0;
+            color: #2d3748;
+            font-size: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+        .headline {
+            background: linear-gradient(135deg, #1a365d, #2b6cb0);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .headline h2 {
+            font-size: 64px;
+            margin: 0;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .headline p {
+            font-size: 20px;
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .list-item {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 12px;
+            font-size: 16px;
+            line-height: 1.5;
+            color: #4a5568;
+        }
+        .list-item strong {
+            color: #2b6cb0;
+            margin-right: 8px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .footer {
+            background-color: #edf2f7;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #718096;
+            border-top: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="poster">
+        <div class="header">
+            <div class="title">
+                <h1>Mini 1: Memory Overload — NYC 311 Dataset</h1>
+                <h2>12.0 GB Dataset · 20.4 Million Records · 44 Columns</h2>
+            </div>
+            <div class="author">
+                <h2>Himanshu Jain</h2>
+                <p>CMPE 275 · Professor Gash · Spring 2026</p>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Column 1 -->
+            <div class="col">
+                <div class="headline">
+                    <h2>34.0×</h2>
+                    <p>Cumulative Speedup vs. AoS Serial</p>
+                </div>
+                
+                <div class="card">
+                    <h3>Key Optimizations</h3>
+                    <div class="list-item">
+                        <strong>Structure of Arrays:</strong> Changed memory layout from AoS (stride-dependent) to SoA (column-oriented) to maximize cache-line efficiency.
+                    </div>
+                    <div class="list-item">
+                        <strong>Flat String Buffers:</strong> Eliminated ~265.2M scattered heap allocations by using a single contiguous `char[]` buffer per column, destroying string overhead.
+                    </div>
+                    <div class="list-item">
+                        <strong>OpenMP Parallelism:</strong> Scatter-gather query engine with `#pragma omp parallel` achieving near-linear scaling up to hardware bandwidth limits.
+                    </div>
+                    <div class="list-item">
+                        <strong>String Interning:</strong> Converted highly-duplicated string fields (59 unique types) to `uint16_t` enum dictionaries.
+                    </div>
+                    <div class="list-item">
+                        <strong>RFC-4180 Parser:</strong> Zero-copy chunking using 14-thread processing via line boundary detection in raw CSV bytes.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Column 2 -->
+            <div class="col">
+                <div class="card">
+                    <h3>AoS vs. SoA Query Performance</h3>
+                    <img src="graphs/aos_vs_soa.png" alt="AoS vs SoA Graph">
+                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
+                        SoA yields 1.8×–3.4× speedups directly via sequential hardware prefetching alone.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <h3>Thread Scaling Degradation (Amdahl's Law)</h3>
+                    <img src="graphs/thread_scaling.png" alt="Thread Scaling Curve">
+                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
+                        Performance collapses beyond 8 threads due to M3 Pro memory bandwidth saturation (~100 GB/s) and efficiency-core contention.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Column 3 -->
+            <div class="col">
+                <div class="card">
+                    <h3>Multiplicative Velocity (SoA + OpenMP)</h3>
+                    <img src="graphs/soa_omp_combined.png" alt="Cumulative Speedup Graph">
+                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
+                        SoA and OpenMP compound formidably. Combined, they crash Date Range Query latencies from 47.6ms to 1.4ms over 20.4M rows.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <h3>Findings & Lessons Learned</h3>
+                    <div class="list-item">
+                        <strong>Threading on Trivial Workloads:</strong> On 1,000 rows, threading is up to 8× slower. The 100K-row threshold is required to offset Thread creation and lock limits.
+                    </div>
+                    <div class="list-item">
+                        <strong>Memory Bottleneck:</strong> The process is inherently limited by memory I/O and RAM throughput rather than core limits.
+                    </div>
+                    <div class="list-item">
+                        <strong>Cache Eviction limits:</strong> The 38% memory saving (7.38 GB → 4.59 GB payload scale) protects data in L2/L3 caches.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div>CMPE 275 Enterprise Software Engineering</div>
+            <div>Built with C++17, OpenMP 5.1, and LLVM Clang 22</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -24,16 +24,17 @@ class CSVParser {
 public:
   CSVParser() = default;
 
-  /** Parse CSV file into AoS DataStore */
-  DataStore parseFile(const std::string &filename);
+  /** Parse CSV file into AoS DataStore (optional row cap) */
+  DataStore parseFile(const std::string &filename, size_t maxRows = 0);
 
   /** Parse CSV file with pre-reserved capacity (for E1.3 experiment) */
   DataStore parseFileWithReserve(const std::string &filename,
-                                 size_t reserveCount);
+                                 size_t reserveCount, size_t maxRows = 0);
 
 #if defined(HAS_OPENMP)
-  /** Phase 2: Parallel CSV parsing — read file, chunk, parallel parse, merge */
-  DataStore parseFileParallel(const std::string &filename);
+  /** Phase 2: Parallel CSV parsing — chunk-based streaming, then parallel
+   * parse, merge */
+  DataStore parseFileParallel(const std::string &filename, size_t maxRows = 0);
 #endif
 
   /** Parse a single CSV line into a ServiceRequest */

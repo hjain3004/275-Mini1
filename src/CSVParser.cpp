@@ -232,7 +232,7 @@ ServiceRequest CSVParser::parseLine(const std::vector<std::string> &fields) {
 
 // ─── Parse entire file (serial) ──────────────────────────────────────────────
 
-DataStore CSVParser::parseFile(const std::string &filename) {
+DataStore CSVParser::parseFile(const std::string &filename, size_t maxRows) {
   DataStore store;
   std::ifstream file(filename);
   if (!file.is_open()) {
@@ -250,6 +250,8 @@ DataStore CSVParser::parseFile(const std::string &filename) {
   while (std::getline(file, line)) {
     if (line.empty())
       continue;
+    if (maxRows > 0 && lastLineCount_ >= maxRows)
+      break;
     auto fields = splitCSVLine(line);
     store.addRecord(parseLine(fields));
     ++lastLineCount_;
@@ -259,7 +261,7 @@ DataStore CSVParser::parseFile(const std::string &filename) {
 }
 
 DataStore CSVParser::parseFileWithReserve(const std::string &filename,
-                                          size_t reserveCount) {
+                                          size_t reserveCount, size_t maxRows) {
   DataStore store;
   store.reserve(reserveCount);
 
@@ -279,6 +281,8 @@ DataStore CSVParser::parseFileWithReserve(const std::string &filename,
   while (std::getline(file, line)) {
     if (line.empty())
       continue;
+    if (maxRows > 0 && lastLineCount_ >= maxRows)
+      break;
     auto fields = splitCSVLine(line);
     store.addRecord(parseLine(fields));
     ++lastLineCount_;
@@ -290,88 +294,70 @@ DataStore CSVParser::parseFileWithReserve(const std::string &filename,
 // ─── Phase 2: Parallel CSV Parsing ──────────────────────────────────────────
 
 #if defined(HAS_OPENMP)
-DataStore CSVParser::parseFileParallel(const std::string &filename) {
-  // Step 1: Read entire file into memory
-  std::ifstream file(filename, std::ios::ate);
+DataStore CSVParser::parseFileParallel(const std::string &filename,
+                                       size_t maxRows) {
+  // Chunk-based streaming parallel parse.
+  // Instead of loading the entire file into memory (which OOMs on 12GB+),
+  // we read CHUNK_SIZE lines at a time, parse each chunk in parallel, then
+  // append to the result store. This bounds RAM to ~chunk overhead only.
+
+  static const size_t CHUNK_SIZE = 100000; // 100K lines per batch
+
+  std::ifstream file(filename);
   if (!file.is_open()) {
     throw std::runtime_error("Cannot open file: " + filename);
   }
 
-  size_t fileSize = file.tellg();
-  file.seekg(0, std::ios::beg);
-
-  std::string fileContent(fileSize, '\0');
-  file.read(&fileContent[0], fileSize);
-  file.close();
-
-  // Step 2: Find line boundaries
-  std::vector<size_t> lineStarts;
-  lineStarts.push_back(0);
-  for (size_t i = 0; i < fileContent.size(); ++i) {
-    if (fileContent[i] == '\n') {
-      if (i + 1 < fileContent.size()) {
-        lineStarts.push_back(i + 1);
-      }
-    }
-  }
-
-  // Skip header (first line)
-  if (lineStarts.size() <= 1) {
+  // Skip header
+  std::string header;
+  if (!std::getline(file, header)) {
     return DataStore();
   }
 
-  size_t dataStart = 1; // skip header
-  size_t numLines = lineStarts.size() - dataStart;
-
-  // Step 3: Parallel parse — each thread gets a chunk of lines
-  int numThreads = omp_get_max_threads();
-  std::vector<std::vector<ServiceRequest>> threadResults(numThreads);
-
-#pragma omp parallel
-  {
-    int tid = omp_get_thread_num();
-    int nThreads = omp_get_num_threads();
-
-    size_t chunkSize = (numLines + nThreads - 1) / nThreads;
-    size_t myStart = dataStart + tid * chunkSize;
-    size_t myEnd = std::min(myStart + chunkSize, lineStarts.size());
-
-    threadResults[tid].reserve(chunkSize);
-
-    for (size_t i = myStart; i < myEnd; ++i) {
-      size_t start = lineStarts[i];
-      size_t end = (i + 1 < lineStarts.size()) ? lineStarts[i + 1] - 1
-                                               : fileContent.size();
-
-      // Extract line (trim trailing \r\n)
-      while (end > start &&
-             (fileContent[end - 1] == '\n' || fileContent[end - 1] == '\r')) {
-        --end;
-      }
-
-      if (end <= start)
-        continue;
-
-      std::string line = fileContent.substr(start, end - start);
-      auto fields = splitCSVLine(line);
-      threadResults[tid].push_back(parseLine(fields));
-    }
-  }
-
-  // Step 4: Merge results
   DataStore store;
-  size_t total = 0;
-  for (const auto &v : threadResults)
-    total += v.size();
-  store.reserve(total);
+  lastLineCount_ = 0;
+  bool done = false;
 
-  for (auto &v : threadResults) {
-    for (auto &sr : v) {
+  while (!done) {
+    // Read a chunk of lines
+    std::vector<std::string> chunk;
+    chunk.reserve(CHUNK_SIZE);
+    std::string line;
+    while (chunk.size() < CHUNK_SIZE && std::getline(file, line)) {
+      if (!line.empty()) {
+        chunk.push_back(std::move(line));
+        if (maxRows > 0 && lastLineCount_ + chunk.size() >= maxRows) {
+          done = true;
+          break;
+        }
+      }
+    }
+    if (chunk.empty())
+      break;
+    if (file.eof())
+      done = true;
+
+    size_t n = chunk.size();
+    std::vector<ServiceRequest> parsed(n);
+
+    // Parse lines in parallel
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < n; ++i) {
+      auto fields = splitCSVLine(chunk[i]);
+      parsed[i] = parseLine(fields);
+    }
+
+    // Append to store (serial merge)
+    store.reserve(store.size() + n);
+    for (auto &sr : parsed) {
       store.addRecord(std::move(sr));
     }
+    lastLineCount_ += n;
+
+    if (maxRows > 0 && lastLineCount_ >= maxRows)
+      break;
   }
 
-  lastLineCount_ = total;
   return store;
 }
 #endif
