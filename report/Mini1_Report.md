@@ -212,7 +212,7 @@ The dataset contains 44 columns spanning five categories:
 
 **Finding (RQ6)**: Query parallelization scales well up to 8 threads, but shows **diminishing returns beyond 8 threads**. The date query actually **degrades from 27ms (8T) to 37ms (14T)** — a 37% slowdown. This is caused by:
 
-1. **Memory bandwidth saturation**: On Apple M3 Pro with unified memory, 8 threads scanning 20.4M × 8-byte timestamps = 54.7 MB of data fully saturate the memory bus. Adding more threads creates contention without additional throughput.
+1. **Memory bandwidth saturation**: On Apple M4 Pro with unified memory, 8 threads scanning 20.4M × 8-byte timestamps = 54.7 MB of data fully saturate the memory bus. Adding more threads creates contention without additional throughput.
 2. **Cache contention**: 14 threads competing for shared L2/L3 cache cause increased evictions.
 3. **Critical section overhead**: The `#pragma omp critical` merge block becomes a bottleneck as more threads contend for the lock.
 
@@ -317,7 +317,7 @@ To capture the true multi-threading behavior on the 5M dataset, we applied a **c
 
 **Finding (RQ11)**: The benefits of SoA and OpenMP are **multiplicative**. SoA alone provides 4.04× and OpenMP on SoA provides an additional 3.65× on top of that, yielding a combined **14.74× improvement** over serial AoS. This is the strongest finding in the entire project.
 
-**Critical observation**: Performance degrades from 8 threads (6.5ms) to 14 threads (8.6ms) — the same bandwidth saturation pattern observed in Phase 2. At 8 threads, the SoA date column (54.7 MB of contiguous `time_t` values) is being scanned at approximately **8.4 GB/s**, which approaches the M3 Pro's peak memory bandwidth. Adding more threads creates contention without increasing throughput.
+**Critical observation**: Performance degrades from 8 threads (6.5ms) to 14 threads (8.6ms) — the same bandwidth saturation pattern observed in Phase 2. At 8 threads, the SoA date column (54.7 MB of contiguous `time_t` values) is being scanned at approximately **8.4 GB/s**, which approaches the M4 Pro's peak memory bandwidth. Adding more threads creates contention without increasing throughput.
 
 ### 6.5 Parse Performance: AoS vs SoA
 
@@ -354,11 +354,11 @@ To capture the true multi-threading behavior on the 5M dataset, we applied a **c
 
 ### 7.3 Failed Optimization: Thread Scaling Beyond 8 Cores
 
-**What we tried**: Scaled OpenMP threads from 1 to 14 on the M3 Pro.
+**What we tried**: Scaled OpenMP threads from 1 to 14 on the M4 Pro.
 
 **What happened**: Date query performance **degraded 37%** from 8 threads (27.1ms) to 14 threads (37.1ms). SoA date query degraded from 6.5ms (8T) to 8.6ms (14T).
 
-**Why it failed**: The Apple M3 Pro has 6 performance cores and 8 efficiency cores. At 8 threads, work runs on the 6 P-cores plus 2 E-cores. At 14 threads, 6 more E-cores join, but they run at lower clock speeds and have smaller caches. The memory bandwidth, being shared, becomes the bottleneck. Scanning 54.7 MB of date data at 8 threads already approaches the ~100 GB/s unified memory bandwidth limit.
+**Why it failed**: The Apple M4 Pro has 6 performance cores and 8 efficiency cores. At 8 threads, work runs on the 6 P-cores plus 2 E-cores. At 14 threads, 6 more E-cores join, but they run at lower clock speeds and have smaller caches. The memory bandwidth, being shared, becomes the bottleneck. Scanning 54.7 MB of date data at 8 threads already approaches the ~100 GB/s unified memory bandwidth limit.
 
 **Lesson**: Thread count optimization must account for heterogeneous core architectures. Optimal thread count is hardware-dependent and must be empirically determined.
 
@@ -456,7 +456,7 @@ To capture the true multi-threading behavior on the 5M dataset, we applied a **c
 - **Statistics**: Mean, standard deviation, min, max reported for every experiment
 - **Warm-up**: First trial serves as warm-up (included in statistics)
 - **Thread control**: `omp_set_num_threads()` and `OMP_NUM_THREADS` environment variable
-- **Hardware**: Apple M3 Pro, 14 cores (6P + 8E), 18 GB unified memory
+- **Hardware**: Apple M4 Pro, 14 cores (6P + 8E), 24 GB unified memory
 - **CSV output**: All raw timing data exported to CSV for graphing
 - **Environment**: macOS terminal, no IDE, no VM
 
