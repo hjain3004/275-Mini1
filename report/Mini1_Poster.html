@@ -4,253 +4,564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini 1 Poster</title>
+    <title>Mini 1 Poster — Memory Layout > Parallelism</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f2f5;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f172a;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            padding: 20px;
         }
 
         .poster {
             width: 1600px;
             height: 900px;
-            background-color: white;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            display: grid;
-            grid-template-rows: 120px 1fr 60px;
+            background: #ffffff;
+            border-radius: 8px;
             overflow: hidden;
-            position: relative;
+            display: grid;
+            grid-template-rows: 100px 1fr 52px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
         }
 
-        .header {
-            background-color: #1a365d;
+        /* ─── Title Bar ─── */
+        .title-bar {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
             color: white;
-            padding: 20px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 0 44px;
         }
 
-        .title h1 {
-            margin: 0 0 10px 0;
-            font-size: 36px;
-            font-weight: 800;
+        .title-bar h1 {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
         }
 
-        .title h2 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 400;
-            color: #90cdf4;
+        .title-bar h1 span.accent {
+            color: #4ade80;
         }
 
-        .author {
+        .title-bar h1 span.dim {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .title-bar .meta {
             text-align: right;
+            font-size: 15px;
+            color: #cbd5e1;
+            line-height: 1.5;
         }
 
-        .author h2 {
-            margin: 0 0 5px 0;
-            font-size: 24px;
+        .title-bar .meta strong {
+            color: white;
+            font-weight: 700;
         }
 
-        .author p {
-            margin: 0;
-            font-size: 16px;
-            color: #90cdf4;
-        }
-
+        /* ─── Content ─── */
         .content {
-            padding: 30px 40px;
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 30px;
+            gap: 0;
         }
 
+        /* Column shared */
         .col {
+            padding: 28px 32px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
         }
 
-        .card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-            flex-grow: 1;
+        .col-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding-bottom: 6px;
+            border-bottom: 2px solid;
+            margin-bottom: 4px;
         }
 
-        .card h3 {
-            margin: 0 0 15px 0;
-            color: #2d3748;
-            font-size: 20px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 8px;
+        /* ─── Left Column: The Problem ─── */
+        .col-problem {
+            background: #fef2f2;
+            border-right: 1px solid #fecaca;
         }
 
-        .headline {
-            background: linear-gradient(135deg, #1a365d, #2b6cb0);
+        .col-problem .col-label {
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
+        .crash-box {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
             color: white;
+            border-radius: 10px;
+            padding: 24px;
             text-align: center;
-            padding: 30px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
         }
 
-        .headline h2 {
-            font-size: 64px;
-            margin: 0;
+        .crash-box .icon {
+            font-size: 42px;
+            margin-bottom: 4px;
+        }
+
+        .crash-box h2 {
+            font-size: 36px;
             font-weight: 900;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            letter-spacing: 1px;
         }
 
-        .headline p {
-            font-size: 20px;
-            margin: 10px 0 0 0;
+        .crash-box p {
+            font-size: 15px;
             opacity: 0.9;
+            margin-top: 6px;
+            line-height: 1.4;
         }
 
-        .list-item {
+        .stat-row {
             display: flex;
-            align-items: baseline;
-            margin-bottom: 12px;
-            font-size: 16px;
+            gap: 12px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 14px 16px;
+            border: 1px solid #fecaca;
+        }
+
+        .stat-card .number {
+            font-size: 26px;
+            font-weight: 900;
+            color: #dc2626;
+            line-height: 1;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+
+        .detail-text {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .detail-text strong {
+            color: #dc2626;
+        }
+
+        /* ─── Center Column: The Solution ─── */
+        .col-solution {
+            border-right: 1px solid #e5e7eb;
+        }
+
+        .col-solution .col-label {
+            color: #059669;
+            border-color: #059669;
+        }
+
+        .chart-container {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .insight-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .insight-box p {
+            font-size: 14px;
+            color: #166534;
             line-height: 1.5;
-            color: #4a5568;
+            margin: 0;
         }
 
-        .list-item strong {
-            color: #2b6cb0;
-            margin-right: 8px;
+        .insight-box p strong {
+            font-weight: 700;
         }
 
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        /* ─── Right Column: The Result ─── */
+        .col-result .col-label {
+            color: #2563eb;
+            border-color: #2563eb;
         }
 
+        .headline-number {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .headline-number .big {
+            font-size: 72px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+        }
+
+        .headline-number .sub {
+            font-size: 15px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .decomp {
+            display: flex;
+            gap: 8px;
+            text-align: center;
+        }
+
+        .decomp-item {
+            flex: 1;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 10px 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .decomp-item .val {
+            font-size: 22px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .decomp-item .desc {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+
+        .decomp-item.layout .val {
+            color: #059669;
+        }
+
+        .decomp-item.omp .val {
+            color: #2563eb;
+        }
+
+        .decomp-item.combined .val {
+            color: #7c3aed;
+        }
+
+        .contrast-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 12px 16px;
+        }
+
+        .contrast-box p {
+            font-size: 14px;
+            color: #991b1b;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        /* ─── Footer ─── */
         .footer {
-            background-color: #edf2f7;
-            padding: 0 40px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
-            color: #718096;
-            border-top: 1px solid #e2e8f0;
+            padding: 0 44px;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .footer .failures {
+            font-style: italic;
         }
     </style>
 </head>
 
 <body>
     <div class="poster">
-        <div class="header">
-            <div class="title">
-                <h1>Mini 1: Memory Overload — NYC 311 Dataset</h1>
-                <h2>12.0 GB Dataset · 20.4 Million Records · 44 Columns</h2>
-            </div>
-            <div class="author">
-                <h2>Himanshu Jain</h2>
-                <p>CMPE 275 · Professor Gash · Spring 2026</p>
+
+        <!-- ═══ Title Bar ═══ -->
+        <div class="title-bar">
+            <h1>
+                <span class="dim">Memory Layout</span> <span class="accent">&gt;</span>
+                <span class="dim">Parallelism:</span>
+                <span class="accent">34.5×</span>
+                <span class="dim">Speedup via SoA on 20.4M NYC 311 Records</span>
+            </h1>
+            <div class="meta">
+                <strong>Himanshu Jain</strong><br>
+                CMPE 275 · Prof. Gash · Spring 2026
             </div>
         </div>
 
+        <!-- ═══ Content ═══ -->
         <div class="content">
-            <!-- Column 1 -->
-            <div class="col">
-                <div class="headline">
-                    <h2>34.5×</h2>
-                    <p>Cumulative Speedup vs. AoS Serial</p>
+
+            <!-- ─── Left: THE PROBLEM ─── -->
+            <div class="col col-problem">
+                <div class="col-label">① The Problem</div>
+
+                <div class="crash-box">
+                    <div class="icon">⛔</div>
+                    <h2>AoS: OOM CRASH</h2>
+                    <p>Array-of-Structs cannot load<br>the full 12 GB dataset</p>
                 </div>
 
-                <div class="card">
-                    <h3>Key Optimizations</h3>
-                    <div class="list-item">
-                        <strong>Structure of Arrays:</strong> Changed memory layout from AoS (stride-dependent) to SoA
-                        (column-oriented) to maximize cache-line efficiency.
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="number">680 B</div>
+                        <div class="label">per struct<br>(ServiceRequest)</div>
                     </div>
-                    <div class="list-item">
-                        <strong>Flat String Buffers:</strong> Eliminated ~265.2M scattered heap allocations by using a
-                        single contiguous `char[]` buffer per column, destroying string overhead.
+                    <div class="stat-card">
+                        <div class="number">~25 GB</div>
+                        <div class="label">total memory<br>needed for 20.4M rows</div>
                     </div>
-                    <div class="list-item">
-                        <strong>OpenMP Parallelism:</strong> Scatter-gather query engine with `#pragma omp parallel`
-                        achieving near-linear scaling up to hardware bandwidth limits.
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="number">24 GB</div>
+                        <div class="label">physical RAM<br>(M4 Pro limit)</div>
                     </div>
-                    <div class="list-item">
-                        <strong>String Interning:</strong> Converted highly-duplicated string fields (59 unique types)
-                        to `uint16_t` enum dictionaries.
+                    <div class="stat-card">
+                        <div class="number">265M</div>
+                        <div class="label">heap allocations<br>(std::string fields)</div>
                     </div>
-                    <div class="list-item">
-                        <strong>RFC-4180 Parser:</strong> Zero-copy chunking using 14-thread processing via line
-                        boundary detection in raw CSV bytes.
-                    </div>
+                </div>
+
+                <div class="detail-text">
+                    <strong>680 B × 20.4M = 13.9 GB</strong> for structs alone.<br>
+                    Add <strong>2× std::string overhead</strong> → exceeds RAM.<br>
+                    The OO design is <strong>fundamentally broken</strong> at scale.
                 </div>
             </div>
 
-            <!-- Column 2 -->
-            <div class="col">
-                <div class="card">
-                    <h3>AoS vs. SoA Query Performance</h3>
-                    <img src="graphs/aos_vs_soa.png" alt="AoS vs SoA Graph">
-                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
-                        SoA yields 1.8×–3.4× speedups directly via sequential hardware prefetching alone.
-                    </p>
+            <!-- ─── Center: THE SOLUTION ─── -->
+            <div class="col col-solution">
+                <div class="col-label">② The Layout Fix</div>
+
+                <div class="chart-container">
+                    <canvas id="aosVsSoaChart"></canvas>
                 </div>
 
-                <div class="card">
-                    <h3>Thread Scaling Degradation (Amdahl's Law)</h3>
-                    <img src="graphs/thread_scaling.png" alt="Thread Scaling Curve">
-                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
-                        Performance collapses beyond 8 threads due to M4 Pro memory bandwidth saturation (~100 GB/s) and
-                        efficiency-core contention.
+                <div class="insight-box">
+                    <p>
+                        <strong>87.5% cache waste</strong> (AoS) → <strong>0% waste</strong> (SoA).<br>
+                        SoA + FlatStringColumn loads <strong>all 20.4M rows in 12.5 GB</strong>.
                     </p>
                 </div>
             </div>
 
-            <!-- Column 3 -->
-            <div class="col">
-                <div class="card">
-                    <h3>Multiplicative Velocity (SoA + OpenMP)</h3>
-                    <img src="graphs/soa_omp_combined.png" alt="Cumulative Speedup Graph">
-                    <p style="font-size: 14px; color: #718096; margin-top: 10px;">
-                        SoA and OpenMP compound formidably. Combined, they crash Date Range Query latencies from 47.6ms
-                        to 1.4ms on 5M rows from the 12 GB dataset.
-                    </p>
+            <!-- ─── Right: THE RESULT ─── -->
+            <div class="col col-result">
+                <div class="col-label">③ The Compound Result</div>
+
+                <div class="headline-number">
+                    <div class="big">34.5×</div>
+                    <div class="sub">Cumulative speedup vs AoS serial</div>
                 </div>
 
-                <div class="card">
-                    <h3>Findings & Lessons Learned</h3>
-                    <div class="list-item">
-                        <strong>Threading on Trivial Workloads:</strong> On 1,000 rows, threading is up to 8× slower.
-                        The 100K-row threshold is required to offset Thread creation and lock limits.
+                <div class="chart-container" style="flex: 1.2;">
+                    <canvas id="cumulativeChart"></canvas>
+                </div>
+
+                <div class="decomp">
+                    <div class="decomp-item layout">
+                        <div class="val">3.58×</div>
+                        <div class="desc">SoA<br>layout</div>
                     </div>
-                    <div class="list-item">
-                        <strong>Memory Bottleneck:</strong> The process is inherently limited by memory I/O and RAM
-                        throughput rather than core limits.
+                    <div class="decomp-item omp">
+                        <div class="val">9.64×</div>
+                        <div class="desc">OpenMP<br>(14T)</div>
                     </div>
-                    <div class="list-item">
-                        <strong>AoS Memory Wall:</strong> AoS requires >24 GB for 20.4M rows (OOM crash). SoA flat
-                        buffers fit the entire dataset in 12.5 GB.
+                    <div class="decomp-item combined">
+                        <div class="val">34.5×</div>
+                        <div class="desc">Combined<br>(3.58 × 9.64)</div>
                     </div>
                 </div>
+
+                <div class="contrast-box">
+                    <p>⚠ Threading alone on AoS: only <strong>6.3×</strong> — layout matters more than parallelism.</p>
+                </div>
             </div>
+
         </div>
 
+        <!-- ═══ Footer ═══ -->
         <div class="footer">
-            <div>CMPE 275 Enterprise Software Engineering</div>
-            <div>Built with C++17, OpenMP 5.1, and LLVM Clang 22</div>
+            <div class="failures">
+                Failed optimizations documented: threading 1000 rows (8× slower) · parallel parse 1-thread (15% slower)
+                · AoS OOM at 20.4M rows
+            </div>
+            <div>C++17 · OpenMP 5.1 · LLVM Clang 22 · Apple M4 Pro (24 GB)</div>
         </div>
+
     </div>
+
+    <script>
+        // ─── Chart 1: AoS vs SoA Bar Chart ───
+        const ctx1 = document.getElementById('aosVsSoaChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: ['Date Range', 'Borough', 'Geo Bbox', 'Composite'],
+                datasets: [
+                    {
+                        label: 'AoS (ms)',
+                        data: [47.6, 126.2, 178.7, 45.6],
+                        backgroundColor: 'rgba(225, 29, 72, 0.8)',
+                        borderColor: 'rgba(225, 29, 72, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'SoA (ms)',
+                        data: [16.0, 52.9, 78.3, 13.3],
+                        backgroundColor: 'rgba(5, 150, 105, 0.8)',
+                        borderColor: 'rgba(5, 150, 105, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Query Performance: AoS vs SoA (5M rows, 10 trials)',
+                        font: { size: 14, weight: 'bold', family: 'Inter' },
+                        color: '#1e293b',
+                        padding: { bottom: 8 }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: { font: { size: 12, family: 'Inter' }, usePointStyle: true, pointStyle: 'rectRounded' }
+                    },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Query Time (ms)', font: { size: 12, family: 'Inter' } },
+                        grid: { color: 'rgba(0,0,0,0.06)' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            },
+            plugins: [{
+                afterDatasetsDraw(chart) {
+                    const meta0 = chart.getDatasetMeta(0);
+                    const meta1 = chart.getDatasetMeta(1);
+                    const ctx = chart.ctx;
+                    const speedups = [2.98, 2.39, 2.28, 3.43];
+                    ctx.save();
+                    ctx.font = 'bold 13px Inter';
+                    ctx.fillStyle = '#1e293b';
+                    ctx.textAlign = 'center';
+                    meta0.data.forEach((bar, i) => {
+                        const x = (bar.x + meta1.data[i].x) / 2;
+                        const y = Math.min(bar.y, meta1.data[i].y) - 8;
+                        ctx.fillText(speedups[i] + '×', x, y);
+                    });
+                    ctx.restore();
+                }
+            }]
+        });
+
+        // ─── Chart 2: Cumulative Speedup Curve ───
+        const ctx2 = document.getElementById('cumulativeChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: ['AoS\nSerial', 'SoA\nSerial', 'SoA\n+1T', 'SoA\n+2T', 'SoA\n+4T', 'SoA\n+8T', 'SoA\n+14T'],
+                datasets: [{
+                    label: 'Speedup vs AoS Serial',
+                    data: [1.0, 3.58, 4.49, 8.65, 17.0, 31.73, 34.49],
+                    borderColor: '#7c3aed',
+                    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#7c3aed',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Cumulative Speedup: SoA + OpenMP',
+                        font: { size: 14, weight: 'bold', family: 'Inter' },
+                        color: '#1e293b',
+                        padding: { bottom: 8 }
+                    },
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Speedup (×)', font: { size: 12, family: 'Inter' } },
+                        grid: { color: 'rgba(0,0,0,0.06)' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10 } }
+                    }
+                }
+            },
+            plugins: [{
+                afterDatasetsDraw(chart) {
+                    const meta = chart.getDatasetMeta(0);
+                    const ctx = chart.ctx;
+                    const vals = [1.0, 3.58, 4.49, 8.65, 17.0, 31.73, 34.49];
+                    ctx.save();
+                    ctx.font = 'bold 11px Inter';
+                    ctx.fillStyle = '#7c3aed';
+                    ctx.textAlign = 'center';
+                    meta.data.forEach((pt, i) => {
+                        if (i === 0) return;
+                        ctx.fillText(vals[i].toFixed(1) + '×', pt.x, pt.y - 12);
+                    });
+                    ctx.restore();
+                }
+            }]
+        });
+    </script>
 </body>
 
 </html>
