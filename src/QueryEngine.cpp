@@ -13,6 +13,7 @@ std::vector<size_t> QueryEngine::queryByDateRange(const DataStore &store,
                                                   time_t start, time_t end) {
   std::vector<size_t> results;
   const auto &records = store.getRecords();
+  results.reserve(records.size() / 100); // Reserve 1% heuristic
   for (size_t i = 0; i < records.size(); ++i) {
     if (records[i].created_date >= start && records[i].created_date <= end) {
       results.push_back(i);
@@ -25,6 +26,7 @@ std::vector<size_t> QueryEngine::queryByBorough(const DataStore &store,
                                                 Borough borough) {
   std::vector<size_t> results;
   const auto &records = store.getRecords();
+  results.reserve(records.size() / 5); // 5 boroughs => roughly 20%
   for (size_t i = 0; i < records.size(); ++i) {
     if (records[i].borough == borough) {
       results.push_back(i);
@@ -40,6 +42,7 @@ std::vector<size_t> QueryEngine::queryByGeoBoundingBox(const DataStore &store,
                                                        double maxLon) {
   std::vector<size_t> results;
   const auto &records = store.getRecords();
+  results.reserve(records.size() / 10);
   for (size_t i = 0; i < records.size(); ++i) {
     double lat = records[i].latitude;
     double lon = records[i].longitude;
@@ -54,6 +57,7 @@ std::vector<size_t> QueryEngine::queryByComplaintType(const DataStore &store,
                                                       const std::string &type) {
   std::vector<size_t> results;
   const auto &records = store.getRecords();
+  results.reserve(records.size() / 50);
   for (size_t i = 0; i < records.size(); ++i) {
     if (records[i].complaint_type == type) {
       results.push_back(i);
@@ -68,6 +72,7 @@ QueryEngine::compositeQuery(const DataStore &store, time_t startDate,
                             const std::string &complaintType) {
   std::vector<size_t> results;
   const auto &records = store.getRecords();
+  results.reserve(records.size() / 100);
   for (size_t i = 0; i < records.size(); ++i) {
     const auto &r = records[i];
     if (r.created_date >= startDate && r.created_date <= endDate &&
@@ -208,6 +213,7 @@ QueryEngine::compositeQueryParallel(const DataStore &store, time_t startDate,
 std::vector<size_t> QueryEngine::queryByDateRange(const DataStoreSoA &store,
                                                   time_t start, time_t end) {
   std::vector<size_t> results;
+  results.reserve(store.created_dates.size() / 100);
   for (size_t i = 0; i < store.created_dates.size(); ++i) {
     if (store.created_dates[i] >= start && store.created_dates[i] <= end) {
       results.push_back(i);
@@ -219,6 +225,7 @@ std::vector<size_t> QueryEngine::queryByDateRange(const DataStoreSoA &store,
 std::vector<size_t> QueryEngine::queryByBorough(const DataStoreSoA &store,
                                                 uint8_t borough) {
   std::vector<size_t> results;
+  results.reserve(store.boroughs.size() / 5);
   for (size_t i = 0; i < store.boroughs.size(); ++i) {
     if (store.boroughs[i] == borough) {
       results.push_back(i);
@@ -232,6 +239,7 @@ QueryEngine::queryByGeoBoundingBox(const DataStoreSoA &store, double minLat,
                                    double maxLat, double minLon,
                                    double maxLon) {
   std::vector<size_t> results;
+  results.reserve(store.latitudes.size() / 10);
   for (size_t i = 0; i < store.latitudes.size(); ++i) {
     if (store.latitudes[i] >= minLat && store.latitudes[i] <= maxLat &&
         store.longitudes[i] >= minLon && store.longitudes[i] <= maxLon) {
@@ -244,6 +252,7 @@ QueryEngine::queryByGeoBoundingBox(const DataStoreSoA &store, double minLat,
 std::vector<size_t> QueryEngine::queryByComplaintType(const DataStoreSoA &store,
                                                       const std::string &type) {
   std::vector<size_t> results;
+  results.reserve(store.complaint_types.size() / 50);
   for (size_t i = 0; i < store.complaint_types.size(); ++i) {
     if (store.complaint_types[i] == type) {
       results.push_back(i);
@@ -257,6 +266,7 @@ QueryEngine::compositeQuery(const DataStoreSoA &store, time_t startDate,
                             time_t endDate, uint8_t borough,
                             const std::string &complaintType) {
   std::vector<size_t> results;
+  results.reserve(store.created_dates.size() / 100);
   for (size_t i = 0; i < store.created_dates.size(); ++i) {
     if (store.created_dates[i] >= startDate &&
         store.created_dates[i] <= endDate && store.boroughs[i] == borough &&
