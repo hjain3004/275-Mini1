@@ -112,31 +112,69 @@ time_t CSVParser::parseDate(const std::string &dateStr) {
 int64_t CSVParser::safeParseInt64(const std::string &s) {
   if (s.empty())
     return 0;
-  try {
-    return std::stoll(s);
-  } catch (...) {
-    return 0;
+  
+  const char *p = s.c_str();
+  int64_t val = 0;
+  bool neg = false;
+  if (*p == '-') {
+      neg = true;
+      ++p;
   }
+  while (*p >= '0' && *p <= '9') {
+      val = val * 10 + (*p - '0');
+      ++p;
+  }
+  return neg ? -val : val;
 }
 
 int32_t CSVParser::safeParseInt32(const std::string &s) {
   if (s.empty())
     return 0;
-  try {
-    return static_cast<int32_t>(std::stol(s));
-  } catch (...) {
-    return 0;
+    
+  const char *p = s.c_str();
+  int32_t val = 0;
+  bool neg = false;
+  if (*p == '-') {
+      neg = true;
+      ++p;
   }
+  while (*p >= '0' && *p <= '9') {
+      val = val * 10 + (*p - '0');
+      ++p;
+  }
+  return neg ? -val : val;
 }
 
 double CSVParser::safeParseDouble(const std::string &s) {
   if (s.empty())
     return 0.0;
-  try {
-    return std::stod(s);
-  } catch (...) {
-    return 0.0;
+  
+  // Custom double parser to avoid slow exceptions
+  const char *p = s.c_str();
+  double val = 0.0;
+  bool neg = false;
+  
+  if (*p == '-') {
+      neg = true;
+      ++p;
   }
+  
+  while (*p >= '0' && *p <= '9') {
+      val = val * 10.0 + (*p - '0');
+      ++p;
+  }
+  
+  if (*p == '.') {
+      ++p;
+      double frac = 0.1;
+      while (*p >= '0' && *p <= '9') {
+          val += (*p - '0') * frac;
+          frac *= 0.1;
+          ++p;
+      }
+  }
+  
+  return neg ? -val : val;
 }
 
 // ─── Parse a single row ─────────────────────────────────────────────────────
