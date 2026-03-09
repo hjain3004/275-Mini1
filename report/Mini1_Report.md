@@ -321,17 +321,49 @@ This is the strongest finding in the entire project. Unlike the AoS case where t
 
 **Lesson**: Object-Oriented "struct per row" designs hit a hard memory wall at ~10M rows on typical hardware. Columnar/SoA layouts are mandatory for datasets exceeding available RAM.
 
-### 7.4 Roadblock: Dual Date Format Parsing
+### 7.4 Roadblock: Parallel Parser OOM — Chunk-Based Rewrite
 
-**Problem**: The NYC OpenData SODA API returns dates in ISO 8601 format (`2026-03-06T02:53:58.000`) while the full CSV download uses US format (`03/06/2026 02:53:58 AM`). Code developed against the sample API data failed silently on the full dataset — all dates parsed as 0.
+**Problem**: The original parallel parser (`parseFileParallel`) loaded the **entire** 12 GB CSV file into a single `std::string` buffer before distributing chunks to threads. On a 24 GB machine, this immediately caused a second OOM crash — the 12 GB raw buffer plus parsed structures exceeded available memory.
 
-**Solution**: The parser attempts ISO 8601 first (looking for the `T` separator), and falls back to MM/DD/YYYY parsing. Both paths use manual `substr` + `stoi` parsing instead of `strptime()` to avoid locale dependencies and improve performance.
+**Solution**: Rewrote the parallel parser to use **streaming chunk-based ingestion**. Instead of buffering the whole file, the parser reads 100,000 lines at a time into a `vector<string>`, distributes parsing across OpenMP threads, appends results to the store, then discards the chunk. This bounds peak memory to ~chunk overhead (a few hundred MB) regardless of file size.
 
-**Impact**: This consumed ~2 hours of debugging time. The failure was silent (0 values instead of exceptions) because we used "safe" parsing functions that return defaults on failure.
+```cpp
+static const size_t CHUNK_SIZE = 100000; // 100K lines per batch
+while (!done) {
+    // Read chunk → parse in parallel → append → discard
+}
+```
 
-### 7.5 Roadblock: RFC-4180 Quoted Fields
+**Lesson**: Parallel file processing must account for the memory cost of the intermediate representation, not just the final data structure. "Read everything into RAM, then parallelize" is a common anti-pattern that fails at scale.
 
-**Problem**: Naive CSV splitting on `,` breaks when the `Resolution Description` field contains commas within quoted strings. Example: `"The Department of Transportation determined..."`. Approximately 40% of records in the full dataset have quoted fields with embedded commas.
+### 7.5 Roadblock: Cold-Cache Anomaly in E2.4 (Threading Overhead Experiment)
+
+**Problem**: The initial E2.4 experiment ("threading overhead on small datasets") produced misleading results. The serial baseline ran first, pulling 5M records from main memory into the L3 cache. The subsequent parallel run then benefited from this warm cache, making threading appear more beneficial than it actually was. Conversely, when the experiment was run on the 1,000-row sample, the parallel version appeared **8× slower** — conflating genuine thread overhead with cold-cache penalties.
+
+**Solution**: Added a **cache warm-up phase** — an untimed throwaway query executed before timing starts. This ensures both serial and parallel runs operate on equally warm caches, isolating the true threading overhead from cache effects.
+
+**Lesson**: Microbenchmark ordering matters. A/B comparisons where A warms the cache for B produce systematically biased results. Always warm the cache before timing, or randomize experiment order.
+
+### 7.6 Roadblock: Dual Date Format Parsing (Silent Failure)
+
+**Problem**: The NYC OpenData SODA API returns dates in ISO 8601 format (`2026-03-06T02:53:58.000`) while the full CSV download uses US format (`03/06/2026 02:53:58 AM`). Code developed against the sample API data **failed silently** on the full dataset — all dates parsed as `time_t = 0`, meaning every date query returned zero matches.
+
+**Why it was hard to find**: The "safe" parsing functions returned 0 (epoch) instead of throwing exceptions, so the program ran successfully with seemingly correct output — just zero results. No error messages, no crashes, no warnings.
+
+**Solution**: Implemented a dual-format parser that detects the `T` separator character: if present, parse as ISO 8601; otherwise, parse as `MM/DD/YYYY HH:MM:SS AM/PM`. Both paths use manual `substr` + `stoi` instead of `strptime()` to avoid locale dependencies.
+
+**Lesson**: "Safe" default values (0, empty string, nullptr) can mask bugs for hours. Consider adding diagnostic counters — if 100% of dates parse to 0, something is wrong.
+
+### 7.7 Roadblock: RFC-4180 Quoted Fields
+
+**Problem**: Naive CSV splitting on `,` breaks when the `Resolution Description` field contains commas within quoted strings. Approximately **40% of records** in the full dataset have quoted fields with embedded commas, embedded newlines, or escaped quotes.
+
+Example of a problematic field:
+```
+"The Department of Transportation determined that this complaint is a ""duplicate"" of complaint #12345, filed on 03/15/2024."
+```
+
+This single field contains commas, escaped quotes (`""`), and looks like multiple fields to a naive splitter.
 
 **Solution**: Implemented an RFC-4180 compliant state machine parser with three states: `NORMAL`, `IN_QUOTES`, and `QUOTE_IN_QUOTES`. This correctly handles:
 - Commas inside quotes
@@ -339,9 +371,27 @@ This is the strongest finding in the entire project. Unlike the AoS case where t
 - Mixed quoted and unquoted fields in the same row
 - Empty quoted fields
 
-### 7.6 Roadblock: FlatStringColumn Memory Overhead on Small Datasets
+**Lesson**: Real-world CSV is never "just split on commas." Any serious CSV parser needs a state machine.
 
-**Problem**: On the 1,000-row sample, `FlatStringColumn` used MORE memory than `vector<string>` (-20% savings, meaning 20% more expensive).
+### 7.8 Roadblock: Column Count Variability
+
+**Problem**: The CSV header declares 44 columns, but some rows have fewer fields (trailing empty columns omitted by the NYC OpenData export). The parser initially assumed exactly 44 fields per row, causing array-out-of-bounds crashes and silent field misalignment when fewer fields were present.
+
+**Solution**: Added bounds checking in `parseLine()` — every field access is gated by `if (fields.size() > N)`, and missing fields default to empty/zero. This is defensive but necessary for real-world data.
+
+**Lesson**: Never assume CSV rows have a consistent column count. Government open data exports are especially inconsistent.
+
+### 7.9 Roadblock: Benchmark Process Timeouts
+
+**Problem**: Running the full benchmark suite on the 12 GB dataset takes 30+ minutes. Automated development environments impose process timeouts (typically 5 minutes), causing the benchmark to be killed mid-execution — after completing only a subset of experiments. This resulted in incomplete CSV output files and partial results that appeared valid but only covered early experiments.
+
+**Solution**: Used `nohup` with background execution and output redirection to ensure the benchmark runs to completion regardless of shell session timeouts. Created a dedicated `run_benchmarks.sh` script that wraps the binary with proper timeout-immune execution.
+
+**Lesson**: Long-running benchmarks need shell-independent execution. Always verify that your output file contains results for ALL experiments, not just the first few.
+
+### 7.10 Roadblock: FlatStringColumn Memory Overhead on Small Datasets
+
+**Problem**: On the 1,000-row sample, `FlatStringColumn` used **MORE** memory than `vector<string>` (-20% savings, meaning 20% more expensive).
 
 **Why**: `std::string` on most implementations uses Small String Optimization (SSO) — strings shorter than ~22 characters are stored inline within the `std::string` object itself, avoiding heap allocation entirely. Many NYC 311 fields are short (e.g., "NYPD" = 4 chars, "BRONX" = 5 chars), so SSO keeps them inline. The `FlatStringColumn` adds a `uint32_t` offset per string (4 bytes overhead) regardless of string length.
 
