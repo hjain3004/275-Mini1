@@ -1,0 +1,9 @@
+benchmark,mean_ms,stddev_ms,min_ms,max_ms,trials,individual_times...
+E1.1: CSV Parse (serial),133082,2560.29,129540,135502,3,129540,135502,134205
+E1.3a: Parse WITHOUT reserve(),135289,66.2828,135239,135383,3,135383,135239,135246
+E1.3b: Parse WITH reserve(N),126517,152.135,126352,126719,3,126480,126352,126719
+E1.6: Query date range (1 month),92.55,0.323439,92.0941,92.8102,3,92.8102,92.0941,92.7456
+E1.7: Query borough (BROOKLYN),149.031,0.588427,148.543,149.859,3,148.543,148.691,149.859
+E1.8: Query geo bounding box (Manhattan),196.486,0.657035,195.562,197.034,3,195.562,196.861,197.034
+E1.9: Query complaint type (Noise - Residential),178.535,0.585029,177.816,179.249,3,178.54,177.816,179.249
+E1.10: Composite query (date+borough+type),63.9958,0.296845,63.663,64.3838,3,63.663,64.3838,63.9405
