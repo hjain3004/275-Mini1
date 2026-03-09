@@ -74,13 +74,34 @@
 
         .header-right {
             text-align: right;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.75);
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
-        .header-right strong {
+        .dataset-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 6px;
+        }
+
+        .dataset-stats .ds {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 6px 14px;
+            text-align: center;
+        }
+
+        .dataset-stats .ds .dv {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
             color: #fff;
+        }
+
+        .dataset-stats .ds .dl {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         /* ── MAIN ── */
@@ -318,9 +339,22 @@
                 <div class="headline"><span class="num">34.5×</span> faster via SoA on 20.4M rows</div>
             </div>
             <div class="header-right">
-                <strong>Himanshu Jain</strong><br>
-                CMPE 275 · Prof. Gash · Spring 2026<br>
-                NYC 311 Service Requests · 12.0 GB · 44 columns
+                <div style="font-size:14px; color:rgba(255,255,255,0.7); margin-bottom: 6px;">NYC 311 Service Requests
+                    Dataset</div>
+                <div class="dataset-stats">
+                    <div class="ds">
+                        <div class="dv">12.0 GB</div>
+                        <div class="dl">File Size</div>
+                    </div>
+                    <div class="ds">
+                        <div class="dv">20.4M</div>
+                        <div class="dl">Rows</div>
+                    </div>
+                    <div class="ds">
+                        <div class="dv">44</div>
+                        <div class="dl">Columns</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -398,9 +432,9 @@
         </div>
 
         <div class="footer">
-            <div class="fail">Failed optimizations: threading 1000 rows (8× slower) · parallel parse 1T (15% slower) ·
-                AoS OOM at 20.4M rows</div>
-            <div>C++17 · OpenMP 5.1 · LLVM Clang 22 · Apple M4 Pro 24 GB</div>
+            <div>Himanshu Jain · CMPE 275 · Prof. Gash · Spring 2026 · Apple M4 Pro 24 GB · C++17 · OpenMP 5.1</div>
+            <div class="fail">Failed optimizations documented: threading 1000 rows (8× slower) · parallel parse 1T (15%
+                slower) · AoS OOM at 20.4M rows</div>
         </div>
     </div>
 
